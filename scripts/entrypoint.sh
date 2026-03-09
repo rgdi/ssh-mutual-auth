@@ -21,7 +21,6 @@ if ! id "$SSH_USER" &>/dev/null; then
 fi
 # Always enforce correct ownership on home + .ssh (idempotent)
 chown -R "${SSH_USER}:${SSH_USER}" "/home/${SSH_USER}"
-chmod 750 "/home/${SSH_USER}"
 chmod 700 "/home/${SSH_USER}/.ssh"
 # Idempotent: ensure sudo entry even if user pre-existed
 echo "${SSH_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${SSH_USER}"

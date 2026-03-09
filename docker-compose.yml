@@ -24,14 +24,6 @@ services:
       - ./logs:/var/log/ssh-auth
       # Bind-mount host cloudflared binary (already installed on host)
       - /usr/local/bin/cloudflared:/usr/local/bin/cloudflared:ro
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-      - SETUID
-      - SETGID
-      - CHOWN
-      - DAC_OVERRIDE
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=64m
     networks:
