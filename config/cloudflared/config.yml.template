@@ -1,0 +1,21 @@
+# Cloudflare Tunnel configuration template
+# Copy to /etc/cloudflared/config.yml inside the container
+# Tunnel token is passed via CF_TUNNEL_TOKEN env var — no file needed for token-based auth
+
+tunnel: ${TUNNEL_ID}
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  # Expose SSH service through tunnel (no internet port needed)
+  - hostname: ssh.${DOMAIN}
+    service: ssh://localhost:22
+
+  # Expose Key API through tunnel (HTTPS enforced by Cloudflare)
+  - hostname: keyapi.${DOMAIN}
+    service: http://localhost:8080
+    originRequest:
+      noTLSVerify: false
+      connectTimeout: 10s
+
+  # Deny all other traffic
+  - service: http_status:404
