@@ -78,6 +78,19 @@ if (( UPDATED == 0 )); then
     exit 0
 fi
 
-# Atomic replacement
+# Log explicit revocations: keys in current file but NOT in new set
+REVOKE_LOG=/var/log/ssh-auth/revocations.log
+if [[ -f "$AUTH_KEYS" ]]; then
+    while IFS= read -r LINE; do
+        [[ "$LINE" =~ ^#  ]] && continue
+        [[ -z "$LINE"     ]] && continue
+        if ! grep -qF "$LINE" "$TMP_KEYS"; then
+            echo "[$(date -u +%FT%TZ)] REVOKED key on ${SERVER_NAME}: ${LINE:0:60}..." >> "$REVOKE_LOG"
+            log "REVOKED stale key: ${LINE:0:60}..."
+        fi
+    done < "$AUTH_KEYS"
+fi
+
+# Atomic replacement — sets real system SSH permissions
 install -m 600 -o "$SSH_USER" -g "$SSH_USER" "$TMP_KEYS" "$AUTH_KEYS"
-log "authorized_keys updated with ${UPDATED} peer key(s)"
+log "authorized_keys updated with ${UPDATED} peer key(s) at ${AUTH_KEYS}"

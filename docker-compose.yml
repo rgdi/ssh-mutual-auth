@@ -11,6 +11,7 @@ services:
       API_SECRET: ${API_SECRET}
       PEER_API_URLS: ${PEER_API_URLS:-}
       PEER_API_SECRET: ${PEER_API_SECRET}
+      PEER_SSH_HOSTS: ${PEER_SSH_HOSTS:-}
       CF_TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
       SSH_USER: ${SSH_USER:-sshuser}
       SSH_USER_SHELL: ${SSH_USER_SHELL:-/bin/bash}

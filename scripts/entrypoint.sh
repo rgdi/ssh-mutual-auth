@@ -6,6 +6,7 @@ set -euo pipefail
 : "${CF_TUNNEL_TOKEN:?CF_TUNNEL_TOKEN is required}"
 : "${SSH_USER:=sshuser}"
 : "${SSH_USER_SHELL:=/bin/bash}"
+: "${PEER_SSH_HOSTS:=}"
 
 LOG=/var/log/ssh-auth/entrypoint.log
 mkdir -p "$(dirname "$LOG")" /var/log/ssh-auth
@@ -29,6 +30,16 @@ if [[ ! -f /keys/id_ed25519 ]]; then
     echo "[$(date -u +%FT%TZ)] No server key found — generating..."
     /scripts/generate-keys.sh
 fi
+
+# Ensure authorized_keys exists with correct ownership (real system SSH)
+touch "/home/${SSH_USER}/.ssh/authorized_keys"
+chmod 600 "/home/${SSH_USER}/.ssh/authorized_keys"
+chown "${SSH_USER}:${SSH_USER}" "/home/${SSH_USER}/.ssh/authorized_keys"
+echo "[$(date -u +%FT%TZ)] SSH user ${SSH_USER} home: /home/${SSH_USER}/.ssh/"
+
+# Write PEER_SSH_HOSTS into cron environment (cron strips env vars)
+printf 'PEER_SSH_HOSTS=%s\n*/5 * * * * root /scripts/check-connectivity.sh >> /var/log/ssh-auth/connectivity.log 2>&1\n' \
+    "$PEER_SSH_HOSTS" >> /etc/cron.d/ssh-rotation
 
 # Start cron for scheduled tasks
 cron
