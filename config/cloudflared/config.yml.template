@@ -12,7 +12,7 @@ ingress:
 
   # Expose Key API through tunnel (HTTPS enforced by Cloudflare)
   - hostname: keyapi.${DOMAIN}
-    service: http://localhost:8080
+    service: http://localhost:${API_PORT:-8080}
     originRequest:
       noTLSVerify: false
       connectTimeout: 10s

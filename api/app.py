@@ -23,6 +23,7 @@ SERVER_NAME = os.environ.get("SERVER_NAME", "server1")
 PUBLIC_KEY_PATH = Path(os.environ.get("PUBLIC_KEY_PATH", "/keys/id_ed25519.pub"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
+API_PORT = int(os.environ.get("API_PORT", "8080"))
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
@@ -119,7 +120,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
-        port=8080,
+        port=API_PORT,
         log_level=LOG_LEVEL.lower(),
         access_log=True,
     )
