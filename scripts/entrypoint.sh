@@ -16,11 +16,13 @@ echo "[$(date -u +%FT%TZ)] Starting ssh-mutual-auth on ${SERVER_NAME}"
 
 # Create SSH user if absent and grant full sudo
 if ! id "$SSH_USER" &>/dev/null; then
-    useradd -m -s "$SSH_USER_SHELL" -G sudo "$SSH_USER"
+    useradd -M -s "$SSH_USER_SHELL" -G sudo "$SSH_USER"  # -M: don't auto-create home
     mkdir -p "/home/${SSH_USER}/.ssh"
-    chmod 700 "/home/${SSH_USER}/.ssh"
-    chown -R "${SSH_USER}:${SSH_USER}" "/home/${SSH_USER}/.ssh"
 fi
+# Always enforce correct ownership on home + .ssh (idempotent)
+chown -R "${SSH_USER}:${SSH_USER}" "/home/${SSH_USER}"
+chmod 750 "/home/${SSH_USER}"
+chmod 700 "/home/${SSH_USER}/.ssh"
 # Idempotent: ensure sudo entry even if user pre-existed
 echo "${SSH_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${SSH_USER}"
 chmod 0440 "/etc/sudoers.d/${SSH_USER}"

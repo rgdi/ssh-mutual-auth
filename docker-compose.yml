@@ -24,8 +24,6 @@ services:
       - ./logs:/var/log/ssh-auth
       # Bind-mount host cloudflared binary (already installed on host)
       - /usr/local/bin/cloudflared:/usr/local/bin/cloudflared:ro
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
