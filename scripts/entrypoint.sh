@@ -52,6 +52,7 @@ cron
 /usr/sbin/sshd -e
 
 # Start Cloudflare Tunnel (cloudflared pre-installed on host, available via PATH or bind-mount)
+CF_PID=""
 if [[ -n "${CF_TUNNEL_TOKEN}" ]]; then
     cloudflared tunnel --no-autoupdate run --token "${CF_TUNNEL_TOKEN}" &
     CF_PID=$!
@@ -64,7 +65,7 @@ fi
 /app/venv/bin/python /app/app.py &
 API_PID=$!
 
-echo "[$(date -u +%FT%TZ)] All services started. PID cf=${CF_PID} api=${API_PID}"
+echo "[$(date -u +%FT%TZ)] All services started. cf=${CF_PID:-host} api=${API_PID}"
 
 # Wait; restart API if it dies
 while true; do
