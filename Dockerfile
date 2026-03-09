@@ -1,9 +1,11 @@
 FROM debian:bookworm-slim
 
-ARG CLOUDFLARED_VERSION=2024.12.2
+# cloudflared is expected to be installed on the host and bind-mounted or available in PATH.
+# The container uses the host's cloudflared via the volume mount or PATH passthrough.
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
+    sudo \
     python3 \
     python3-pip \
     python3-venv \
@@ -15,12 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     iproute2 \
     && rm -rf /var/lib/apt/lists/*
-
-RUN arch=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${arch}.deb" \
-    -o /tmp/cloudflared.deb \
-    && dpkg -i /tmp/cloudflared.deb \
-    && rm /tmp/cloudflared.deb
 
 RUN mkdir -p /var/run/sshd /keys /root/.ssh /app /scripts \
     && chmod 700 /root/.ssh /keys
