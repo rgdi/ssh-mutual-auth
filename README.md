@@ -1,110 +1,99 @@
-# SSH Mutual Authentication — Docker + Cloudflare Tunnel
+# Tailscale/Celery Distributed Worker Node
 
-Private, zero-open-port mutual SSH trust between servers.
-Keys rotate every **24 hours**. No port is exposed to the internet.
+This repository configures a lightweight, secure distributed worker node. Within a Tailscale network, each node consists of a Celery worker, mTLS client, and a Prometheus monitoring agent. Security is enforced through certificates and public keys (via Smallstep Certificates), ensuring the node only executes tasks it is authorized for.
 
-## Architecture
+---
 
-```
-Server A                          Server B
-─────────────────                 ─────────────────
-sshd (internal)  ←── CF Tunnel ──→ sshd (internal)
-Key API :8080    ←── CF Tunnel ──→ Key API :8080
-rotate-keys.sh (cron 00:00 UTC)
-update-authorized-keys.sh (cron */5)
-```
+## Node Architecture
 
-Keys are exchanged **only** through Cloudflare Tunnel (HTTPS).
-Each response is signed with HMAC-SHA256. Stale responses (>5 min) are rejected.
+Each node in the network runs the following components:
 
-## Quick Start
+| Component     | Function                                |
+| ------------- | --------------------------------------- |
+| Tailscale     | Private network connection              |
+| Worker        | Executes assigned Celery tasks          |
+| Cert Client   | Retrieves node certificates from the CA |
+| Node Exporter | Exports host metrics to Prometheus      |
+| Watcher       | Reports node status (optional)          |
 
-### Prerequisites
-- Docker + Docker Compose
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) installed locally
-- A Cloudflare account with Zero Trust enabled
+---
 
-### 1 — Create Cloudflare Tunnels (one per server)
+## Getting Started
+
+Each node defines its identity via environment variables. Start by copying the example configuration:
 
 ```bash
-cloudflared tunnel login
-cloudflared tunnel create server1-ssh-auth
-# Copy the tunnel token shown — used as CF_TUNNEL_TOKEN
+cp .env.example .env
 ```
 
-In Cloudflare Zero Trust dashboard, add DNS routes:
-- `ssh.server1.example.com` → SSH service
-- `keyapi.server1.example.com` → Key API
+Edit `.env` to define the node identity:
+```env
+NODE_ID=node-eu-1
+NODE_QUEUE=queue_cpu
+```
 
-### 2 — Configure each server
+### Starting the Node
+
+Make sure Tailscale is running on the host. Then start the stack:
 
 ```bash
-git clone https://github.com/YOUR_USER/ssh-mutual-auth
-cd ssh-mutual-auth
-bash scripts/init-server.sh   # creates .env with random secrets
+docker-compose up -d
 ```
 
-Edit `.env`:
-```
-SERVER_NAME=server1
-CF_TUNNEL_TOKEN=<paste tunnel token>
-PEER_API_URLS=https://keyapi.server2.example.com
-PEER_API_SECRET=<same value on ALL servers>
-```
+---
 
-### 3 — Start
+## Security Model
 
-```bash
-docker compose up -d
-docker compose logs -f
-```
+The infrastructure relies on multiple layers of security to emulate a distributed orchestration system.
 
-### 4 — Test
+### 1. Redis Accessible Only via Tailscale
+Redis should be bound exclusively to your Tailscale interface (`100.x.x.x`), preventing any internet exposure.
 
-```bash
-# Check API health (no auth required)
-curl https://keyapi.server1.example.com/health
+### 2. Tailscale ACLs
+Restrict access so workers can only communicate with the Redis server:
 
-# Get bearer token
-BEARER=$(echo -n 'ssh-auth-v1' | openssl dgst -sha256 -hmac "$API_SECRET" | awk '{print $2}')
-
-# Fetch public key (signed response)
-curl -H "Authorization: Bearer $BEARER" https://keyapi.server1.example.com/public-key | jq .
-
-# SSH via Cloudflare Tunnel (install cloudflared on client)
-ssh -o ProxyCommand="cloudflared access ssh --hostname ssh.server1.example.com" sshuser@ssh.server1.example.com
+```json
+{
+ "acls": [
+  {
+   "action": "accept",
+   "src": ["tag:worker"],
+   "dst": ["tag:rpi:6379"]
+  }
+ ]
+}
 ```
 
-## Security Properties
+### 3. Cryptographic Node Identity (mTLS)
+Each node securely provisions a certificate (`node.crt`, `node.key`) via a central CA (Smallstep). This allows for strong identity verification and enables prompt revocation of compromised nodes. Workers can validate the `CN` of the certificates.
 
-| Property | Implementation |
-|---|---|
-| No open ports | All traffic via Cloudflare Tunnel |
-| Key authenticity | HMAC-SHA256 per-response signature |
-| Replay protection | Timestamp window ±5 min + nonce |
-| Ciphers | ChaCha20-Poly1305, AES-256-GCM only |
-| Key type | Ed25519 only |
-| Key rotation | Automatic every 24h (cron) |
-| Auth method | Public key only, passwords disabled |
-| Root login | Disabled |
+### 4. Task-level Restriction
+Nodes explicitly verify task authorization prior to execution. If a task requires execution on specific nodes, the worker verifies `task.headers["allowed_nodes"]` against its local `NODE_ID`. Unrecognized nodes will gracefully reject the task.
 
-## File Reference
+### 5. Monitoring
+Each node exports metrics (via Prometheus `node-exporter`) that can be centralized into a Grafana dashboard.
 
-| File | Purpose |
-|---|---|
-| `Dockerfile` | Container image |
-| `docker-compose.yml` | Service definition |
-| `api/app.py` | Public key API (FastAPI) |
-| `scripts/entrypoint.sh` | Container startup |
-| `scripts/generate-keys.sh` | Ed25519 key generation |
-| `scripts/rotate-keys.sh` | 24h rotation cron |
-| `scripts/update-authorized-keys.sh` | Peer key sync cron |
-| `config/sshd_config` | Hardened SSH config |
-| `config/cloudflared/config.yml.template` | Tunnel template |
+---
 
-## Logs
+## End-to-End Workflow
 
-```bash
-docker exec ssh-mutual-auth tail -f /var/log/ssh-auth/key-rotation.log
-docker exec ssh-mutual-auth tail -f /var/log/ssh-auth/auth-update.log
-```
+1. An authorized node/service creates a task.
+2. The task is queued securely in Redis.
+3. The assigned worker checks its relevant queue.
+4. The worker verifies its authorization for the task.
+5. The task is executed.
+6. Result/status is reported back.
+
+---
+
+## Resource Footprint
+
+The node stack is highly optimized and suited for low-resource VPS or Raspberry Pi environments:
+
+| Service       | Approx. RAM |
+| ------------- | ----------- |
+| Worker        | ~80 MB      |
+| Node Exporter | ~20 MB      |
+| Step Client   | ~10 MB      |
+
+**Total ≈ 110 MB**
