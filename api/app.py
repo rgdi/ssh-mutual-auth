@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 API_SECRET      = os.environ["API_SECRET"]
+PEER_API_SECRET = os.environ.get("PEER_API_SECRET", API_SECRET)
 SERVER_NAME     = os.environ.get("SERVER_NAME", "server1")
 PUBLIC_KEY_PATH = Path(os.environ.get("PUBLIC_KEY_PATH", "/keys/id_ed25519.pub"))
 PEER_API_URLS   = os.environ.get("PEER_API_URLS", "")
@@ -25,20 +26,28 @@ bearer = HTTPBearer(auto_error=True)
 
 
 def _expected_token() -> str:
+    """Generates the expected HMAC bearer token for authenticating incoming requests."""
     return hmac.new(API_SECRET.encode(), b"ssh-auth-v1", hashlib.sha256).hexdigest()
 
+def _peer_expected_token() -> str:
+    """Generates the HMAC bearer token to use when making requests to peers."""
+    return hmac.new(PEER_API_SECRET.encode(), b"ssh-auth-v1", hashlib.sha256).hexdigest()
+
 def verify_token(c: HTTPAuthorizationCredentials = Security(bearer)) -> None:
+    """Validates the incoming HTTP Bearer token against the expected local token."""
     if not hmac.compare_digest(c.credentials, _expected_token()):
         log.warning("Invalid bearer token")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def sign_payload(payload: dict) -> str:
+    """Generates an HMAC-SHA256 signature for a given dictionary payload."""
     msg = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hmac.new(API_SECRET.encode(), msg, hashlib.sha256).hexdigest()
 
 
 def _get_fingerprint() -> str:
+    """Retrieves the SSH key fingerprint for the local public key via `ssh-keygen`."""
     try:
         r = subprocess.run(["ssh-keygen", "-lf", str(PUBLIC_KEY_PATH)],
                            capture_output=True, text=True, timeout=5)
@@ -48,6 +57,7 @@ def _get_fingerprint() -> str:
 
 
 def _notify_webhook(event: str, detail: str) -> None:
+    """Sends a notification payload to the configured webhook URL if one exists."""
     if not WEBHOOK_URL:
         return
     try:
@@ -74,10 +84,12 @@ async def _trigger_peers() -> dict:
         return {}
     import httpx
     results: dict = {}
-    token = _expected_token()
+    token = _peer_expected_token()
     async with httpx.AsyncClient(timeout=10) as client:
         for url in PEER_API_URLS.split(","):
             url = url.strip()
+            if not url:
+                continue
             try:
                 r = await client.post(f"{url}/trigger-update",
                                       headers={"Authorization": f"Bearer {token}"})
@@ -89,6 +101,7 @@ async def _trigger_peers() -> dict:
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    """Adds essential security headers to all outgoing responses."""
     resp = await call_next(request)
     resp.headers.update({"X-Content-Type-Options": "nosniff",
                          "X-Frame-Options": "DENY", "Cache-Control": "no-store"})
@@ -97,6 +110,10 @@ async def security_headers(request: Request, call_next):
 
 @app.get("/public-key")
 async def get_public_key(_: None = Security(verify_token)):
+    """
+    Returns the public key of this node, signed securely via HMAC-SHA256.
+    The response is secured by a timestamp and nonce to prevent replay attacks.
+    """
     if not PUBLIC_KEY_PATH.exists():
         raise HTTPException(status_code=503, detail="Key not initialised")
     public_key = PUBLIC_KEY_PATH.read_text().strip()
@@ -113,6 +130,7 @@ async def get_public_key(_: None = Security(verify_token)):
 
 @app.get("/health")
 async def health():
+    """Unauthenticated healthcheck point tracking API availability."""
     return JSONResponse({"status": "ok" if PUBLIC_KEY_PATH.exists() else "degraded",
                          "server": SERVER_NAME, "key_ready": PUBLIC_KEY_PATH.exists(),
                          "timestamp": int(time.time())})
@@ -120,6 +138,7 @@ async def health():
 
 @app.get("/status")
 async def get_status(_: None = Security(verify_token)):
+    """Retrieves internal peer connection status from status file."""
     peers: dict = {}
     if STATUS_FILE.exists():
         try:

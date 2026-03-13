@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Generate a fresh ed25519 key pair for this server.
+# ==============================================================================
+# generate-keys.sh
+# ------------------------------------------------------------------------------
+# Generates a fresh ed25519 SSH key pair for the server.
+# Archives old keys safely into a backup directory.
+#
 # Private key: /keys/id_ed25519 (mode 600, root only)
 # Public key:  /keys/id_ed25519.pub (mode 644)
+# ==============================================================================
 set -euo pipefail
 
 KEY_DIR=/keys

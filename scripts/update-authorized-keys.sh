@@ -30,6 +30,7 @@ UPDATED=0
 IFS=',' read -ra PEERS <<< "$PEER_API_URLS"
 for PEER_URL in "${PEERS[@]}"; do
     PEER_URL=$(echo "$PEER_URL" | tr -d ' ')
+    [[ -z "$PEER_URL" ]] && continue
     log "Fetching public key from ${PEER_URL}"
 
     RESPONSE=$(curl -sf --max-time 15 \

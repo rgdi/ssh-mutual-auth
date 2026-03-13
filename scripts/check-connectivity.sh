@@ -52,6 +52,11 @@ for ENTRY in "${ENTRIES[@]}"; do
     RESULTS+=("${HOST}|${USER}|${STATUS}|${LATENCY}|${TS}")
 done
 
+if (( ${#RESULTS[@]} == 0 )); then
+    log "No valid results to report — skipping status file update"
+    exit 0
+fi
+
 # Build JSON atomically via Python (avoids bash quoting edge cases)
 TMP=$(mktemp /tmp/peer-status.XXXXXX)
 

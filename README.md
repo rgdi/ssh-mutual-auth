@@ -102,8 +102,16 @@ ssh -o ProxyCommand="cloudflared access ssh --hostname ssh.server1.example.com" 
 | `config/sshd_config` | Hardened SSH config |
 | `config/cloudflared/config.yml.template` | Tunnel template |
 
-## Logs
+## Detailed Usage and Troubleshooting
 
+### Troubleshooting Authentication
+- **Invalid Bearer Token:** Ensure both servers use identical `API_SECRET` and `PEER_API_SECRET`.
+- **Key Mismatches:** You can trigger an immediate manual update of public keys by accessing the WebSocket API or by directly running `update-authorized-keys.sh` on the container.
+- **Connection Latency:** Connectivity results are periodically stored to `/tmp/peer-status.json` via `check-connectivity.sh`. You can poll the `/status` API endpoint.
+
+### Checking Logs
+
+To check specific logs for rotation or authentication:
 ```bash
 docker exec ssh-mutual-auth tail -f /var/log/ssh-auth/key-rotation.log
 docker exec ssh-mutual-auth tail -f /var/log/ssh-auth/auth-update.log

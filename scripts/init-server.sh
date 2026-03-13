@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# init-server.sh
+# ------------------------------------------------------------------------------
 # One-time initialisation helper — run on the host before docker compose up.
-# Validates required env vars and creates .env if missing.
+# Validates required env vars, auto-generates cryptographically strong shared
+# secrets, and creates .env if missing.
+# ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
